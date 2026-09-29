@@ -1,0 +1,4 @@
+:begin :instance :status trigger-rule.
+sample-trigger := trigger-rule &
+ [ FLAGS.TRIGGER "sample" ].
+:end :instance.

@@ -7,16 +7,25 @@ DELPHIN_LIBS=-L ${LOGONROOT}/lingo/lkb/lib/linux.x86.64 -Wl,-Bstatic -litsdb -lp
 POST_CFLAGS=-I post/ -DPOST
 POST_LIBS=-Wl,-Bstatic -lutil -Wl,-Bdynamic	# for openpty for calling out to tnt (which uses fully buffered stdio)
 
-REPP_LIBS=-Wl,-Bstatic -lrepp -Wl,-Bdynamic
-#REPP_CFLAGS=-I ${REPP_DIR}/include/
-# set by MacOSX.config (Darwin only) to vendor/repp/lib/librepp.a, so that
-# lib gets built from vendor/repp-src for whichever arch is running `make`
-REPP_BUILD_DEP=
+# repp doesn't build against current Boost releases upstream (Boost dropped
+# the plain-C regex.h API it's written against); vendor/repp-src carries a
+# patch for that, built into vendor/repp/lib/librepp.a below -- for whatever
+# machine/arch/OS is actually running `make`, rather than relying on a
+# system package (which for repp specifically, no distro ships anyway).
+REPP_CFLAGS=-I vendor/repp/include
+REPP_LIBS=vendor/repp/lib/librepp.a
+REPP_BUILD_DEP=vendor/repp/lib/librepp.a
+BOOST_CFLAGS=
 
-BOOST_REGEX_LIBS=-Wl,-Bstatic -lboost_regex -lstdc++ -Wl,-Bdynamic
+BOOST_REGEX_LIBS=-lboost_regex -lstdc++
+
+# GNU ld (Linux) vs Apple ld64 (macOS) spell "record this shared lib's
+# install name" differently; MacOSX.config overrides this for Darwin.
+SONAME_FLAG=-Wl,-soname,libace.so
 
 #CPU=-m32
 CC=gcc
+CXX=g++
 #CFLAGS=-g -O6 -fomit-frame-pointer -funsigned-char -falign-loops=32 -funroll-loops ${CPU} -fprofile-generate=./profile-data/
 #REPP_LIBS+=-lgcov
 #CFLAGS=-g -O6 -fomit-frame-pointer -funsigned-char -falign-loops=32 -funroll-loops ${CPU} -fprofile-use=./profile-data/
@@ -28,6 +37,11 @@ CFLAGS=-g -O6 -fno-omit-frame-pointer -funsigned-char -falign-loops=32 -funroll-
 #CFLAGS=-g -O2 -pg -funsigned-char
 #CFLAGS=-g -funsigned-char
 #CFLAGS+=-fPIC
+
+# gnu89 restores implicit-int/-function as warnings instead of the hard
+# errors modern compilers (gcc 14+, clang 16+) default to; this codebase's
+# K&R-ish style relies on that being legal.
+CFLAGS+=-std=gnu89
 
 EXPORT_DYNAMIC_CFLAG=-Wl,--export-dynamic
 
@@ -47,11 +61,6 @@ APPOBJ=${OBJ} main.o post/post.o timer.o linenoise.o lui-cli.o
 
 all: ace libace.so libace.a
 
-# repp (ACE's REPP/tokenization dependency) doesn't build against current
-# Boost releases upstream; vendor/repp-src carries a patch for that. Built
-# here -- rather than shipping a prebuilt archive -- so it's always native
-# to whatever machine/arch is actually running `make`.
-CXX=$(subst gcc-,g++-,${CC})
 vendor/repp/lib/librepp.a: vendor/repp-src/librepp/preprocessor.c vendor/repp-src/librepp/load_repp.c vendor/repp-src/librepp/unicode.c vendor/repp-src/include/librepp.h vendor/repp-src/librepp/unicode.h
 	mkdir -p vendor/repp/lib vendor/repp/include
 	cp vendor/repp-src/include/librepp.h vendor/repp-src/librepp/unicode.h vendor/repp/include/
@@ -83,7 +92,7 @@ ${HIDDENPICOBJS} : pic/%.o: %.c
 
 libace.so: ${PICOBJS} ${HIDDENPICOBJS} post/post.o ${REPP_BUILD_DEP}
 	rm -f libace.so
-	${CC} -shared ${PICOBJS} ${HIDDENPICOBJS} post/post.o -Wl,-install_name,libace.so -o libace.so -L vendor/repp/lib -lrepp ${DELPHIN_LIBS} -ldl -lutil ${BOOST_REGEX_LIBS}
+	${CC} -shared ${PICOBJS} ${HIDDENPICOBJS} post/post.o ${SONAME_FLAG} -o libace.so -L vendor/repp/lib -lrepp ${DELPHIN_LIBS} -ldl -lutil ${BOOST_REGEX_LIBS}
 # note: -lutil cannot be compiled statically into a shared library, because the bozos that built it didn't use -fPIC...
 
 libace.a: ${PICOBJS} ${HIDDENPICOBJS} post/post.o
