@@ -373,9 +373,6 @@ extern struct type_hierarchy	*main_th, *semi_th, *semi_p_th;
 	for(i=0;i<ngeneric_les;i++)generic_les[i] = freeze_lexeme(generic_les[i]);
 	freezer_note("lex-info");
 
-	for(i=0;i<nfnames;i++)fnames[i] = freeze_string(fnames[i]);
-	introduce = freeze_block(introduce, sizeof(int) * nfnames);
-
 	G->rule_filter = freeze_rule_filter();
 	freezer_note("\n miscellaneous");
 
@@ -401,19 +398,15 @@ extern struct type_hierarchy	*main_th, *semi_th, *semi_p_th;
 	G->norules = norules;
 	G->nlexemes = nlexemes;
 	G->ngeneric_les = ngeneric_les;
-	G->nfnames = nfnames;
 	G->rules = slab_alloc(sizeof(void*) * G->nrules);	memcpy(G->rules, rules, sizeof(void*) * G->nrules);
 	G->orules = slab_alloc(sizeof(void*) * G->norules);	memcpy(G->orules, orules, sizeof(void*) * G->norules);
 	G->lexemes = slab_alloc(sizeof(void*) * G->nlexemes);	memcpy(G->lexemes, lexemes, sizeof(void*) * G->nlexemes);
 	G->generic_les = slab_alloc(sizeof(void*) * G->ngeneric_les);	memcpy(G->generic_les, generic_les, sizeof(void*) * G->ngeneric_les);
 	G->generic_le_infos = slab_alloc(sizeof(struct generic_le_info) * G->ngeneric_les);	memcpy(G->generic_le_infos, generic_le_infos, sizeof(struct generic_le_info) * G->ngeneric_les);
-	G->fnames = slab_alloc(sizeof(void*) * G->nfnames);	memcpy(G->fnames, fnames, sizeof(char*) * G->nfnames);
 	G->vpm = freeze_vpm();
 	G->labels = freeze_labels();
-	G->conf = freeze_conf();
 	G->repp = freeze_repp();
 	G->instances = freeze_instances();
-	G->introduce = introduce;
 	G->morpho_globals = freeze_morpho_globals();
 	G->qc = freeze_qc();
 	freezer_note("miscellaneous");
@@ -450,6 +443,30 @@ extern void	*token_mapping_rules, *lexical_filtering_rules, *post_generation_map
 	freezer_note("latmap rules");
 
 	//printf("\n"); print_rule("sing_noun_infl_rule");
+
+	// fnames/introduce/conf's restrictor arrays must be frozen last:
+	// freeze_transfer() (and other freeze_* calls above) can still call
+	// lookup_fname() for a feature name that's never appeared anywhere
+	// else in the grammar, which grows fnames/introduce and leaves the
+	// restrictor arrays (deleted_daughters/parsing_packing/etc, sized off
+	// nfnames by load_restrictors()) undersized. Freezing fnames/introduce
+	// any earlier leaves those growable arrays pointing into the
+	// (already-committed) slab, so a later lookup_fname() realloc()s a
+	// pointer the allocator never gave out -- freeze_block()/freeze_string()
+	// only ever appends new slab data, they never free the old block.
+	// Refreshing the restrictors here (still before freeze_conf(), and
+	// still with g_mode == -1 throughout a -G run) keeps their frozen
+	// size in sync with the final nfnames, so a later load doesn't see
+	// restrictor_size != nfnames and try to reload them mid-parse.
+	extern int reload_restrictors;
+	extern void load_restrictors();
+	if(reload_restrictors)load_restrictors();
+	G->conf = freeze_conf();
+	for(i=0;i<nfnames;i++)fnames[i] = freeze_string(fnames[i]);
+	introduce = freeze_block(introduce, sizeof(int) * nfnames);
+	G->nfnames = nfnames;
+	G->fnames = slab_alloc(sizeof(void*) * G->nfnames);	memcpy(G->fnames, fnames, sizeof(char*) * G->nfnames);
+	G->introduce = introduce;
 
 	printf("\n ... "); commit_slab();
 	return 0;

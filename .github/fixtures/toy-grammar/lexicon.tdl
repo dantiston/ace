@@ -1,0 +1,18 @@
+n1 := noun-lex &
+  [ STEM < "n1" >,
+    SYNSEM.LKEYS.KEYREL.PRED "_n1_n_rel" ].
+
+iv := intransitive-verb-lex &
+  [ STEM < "iv" >,
+    SYNSEM.LKEYS.KEYREL.PRED "_iv_v_rel" ].
+
+n2 := noun-lex & [ STEM < "n2" >, SYNSEM.LKEYS.KEYREL.PRED "_n2_n_rel" ].
+n3 := noun-lex & [ STEM < "n3" >, SYNSEM.LKEYS.KEYREL.PRED "_n3_n_rel" ].
+n4 := noun-lex & [ STEM < "n4" >, SYNSEM.LKEYS.KEYREL.PRED "_n4_n_rel" ].
+n5 := noun-lex & [ STEM < "n5" >, SYNSEM.LKEYS.KEYREL.PRED "_n5_n_rel" ].
+n6 := noun-lex & [ STEM < "n6" >, SYNSEM.LKEYS.KEYREL.PRED "_n6_n_rel" ].
+n7 := noun-lex & [ STEM < "n7" >, SYNSEM.LKEYS.KEYREL.PRED "_n7_n_rel" ].
+n8 := noun-lex & [ STEM < "n8" >, SYNSEM.LKEYS.KEYREL.PRED "_n8_n_rel" ].
+n9 := noun-lex & [ STEM < "n9" >, SYNSEM.LKEYS.KEYREL.PRED "_n9_n_rel" ].
+n10 := noun-lex & [ STEM < "n10" >, SYNSEM.LKEYS.KEYREL.PRED "_n10_n_rel" ].
+n11 := noun-lex & [ STEM < "n11" >, SYNSEM.LKEYS.KEYREL.PRED "_n11_n_rel" ].

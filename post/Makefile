@@ -7,6 +7,12 @@ ifeq (${shell uname -s},Darwin)
 include ../MacOSX.config
 endif
 
+# gnu89 restores implicit-int/-function as warnings instead of the hard
+# errors modern compilers default to; this codebase's K&R-ish style relies
+# on that being legal. (Not inherited from MacOSX.config -- this is its own
+# separate `make -C post` invocation, and needs it on Linux too.)
+CFLAGS += -std=gnu89
+
 # compilation flags:
 
 CFLAGS += -DUSE_HMM

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Intel)
+            runs-on: macos-15-intel
+          - name: macOS (Apple Silicon)
+            runs-on: macos-15
+          - name: Ubuntu
+            runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Real GCC is required on macOS: ACE's C relies on GNU nested
+      # functions throughout, which Apple's clang (aliased as /usr/bin/gcc)
+      # cannot compile at all. vendor/repp-src (built by the Makefile) also
+      # needs a real g++ paired with it. Linux's default gcc/g++ already are
+      # real GCC, so no override is needed there.
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install gcc boost
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libboost-regex-dev
+
+      - name: Build ace
+        run: make all
+
+      - name: Test parsing, generation, and transfer/rule-loading
+        run: .github/scripts/smoke-test.sh
