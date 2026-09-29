@@ -1,8 +1,11 @@
 PREFIX=/usr/local
 
-# comment out these two lines if you don't want to include [incr tsdb()] support
+# [incr tsdb()] support needs a LOGON installation's headers and libs; only
+# enable it when LOGONROOT points at one, so plain Linux builds still work.
+ifdef LOGONROOT
 DELPHIN_CFLAGS=-isystem ${LOGONROOT}/lingo/lkb/include -DTSDB
 DELPHIN_LIBS=-L ${LOGONROOT}/lingo/lkb/lib/linux.x86.64 -Wl,-Bstatic -litsdb -lpvm3 -Wl,-Bdynamic
+endif
 
 POST_CFLAGS=-I post/ -DPOST
 POST_LIBS=-Wl,-Bstatic -lutil -Wl,-Bdynamic	# for openpty for calling out to tnt (which uses fully buffered stdio)
@@ -64,9 +67,9 @@ all: ace libace.so libace.a
 vendor/repp/lib/librepp.a: vendor/repp-src/librepp/preprocessor.c vendor/repp-src/librepp/load_repp.c vendor/repp-src/librepp/unicode.c vendor/repp-src/include/librepp.h vendor/repp-src/librepp/unicode.h
 	mkdir -p vendor/repp/lib vendor/repp/include
 	cp vendor/repp-src/include/librepp.h vendor/repp-src/librepp/unicode.h vendor/repp/include/
-	${CC} -std=gnu89 -O2 -I vendor/repp-src/include -I vendor/repp-src/librepp -c vendor/repp-src/librepp/unicode.c -o vendor/repp/lib/unicode.o
-	${CXX} -std=c++17 -O2 ${BOOST_CFLAGS} -I vendor/repp-src/include -I vendor/repp-src/librepp -c vendor/repp-src/librepp/preprocessor.c -o vendor/repp/lib/preprocessor.o
-	${CXX} -std=c++17 -O2 ${BOOST_CFLAGS} -I vendor/repp-src/include -I vendor/repp-src/librepp -c vendor/repp-src/librepp/load_repp.c -o vendor/repp/lib/load_repp.o
+	${CC} -std=gnu89 -O2 -fPIC -I vendor/repp-src/include -I vendor/repp-src/librepp -c vendor/repp-src/librepp/unicode.c -o vendor/repp/lib/unicode.o
+	${CXX} -std=c++17 -O2 -fPIC ${BOOST_CFLAGS} -I vendor/repp-src/include -I vendor/repp-src/librepp -c vendor/repp-src/librepp/preprocessor.c -o vendor/repp/lib/preprocessor.o
+	${CXX} -std=c++17 -O2 -fPIC ${BOOST_CFLAGS} -I vendor/repp-src/include -I vendor/repp-src/librepp -c vendor/repp-src/librepp/load_repp.c -o vendor/repp/lib/load_repp.o
 	ar cru vendor/repp/lib/librepp.a vendor/repp/lib/unicode.o vendor/repp/lib/preprocessor.o vendor/repp/lib/load_repp.o
 	ranlib vendor/repp/lib/librepp.a
 
