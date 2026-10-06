@@ -618,6 +618,10 @@ int	main(int	argc, char	*argv[])
 {
 	struct job_stats	stats;
 
+	// must happen before anything else gets a chance to mmap() -- see
+	// reserve_freezer_address_space()'s comment in freeze.c
+	reserve_freezer_address_space();
+
 	setlocale(LC_ALL, "");
 	setlocale(LC_NUMERIC, "POSIX");
 

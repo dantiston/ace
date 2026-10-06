@@ -36,6 +36,10 @@ extern int	g_loaded, inhibit_results, trace;
 
 void	ace_load_grammar(char	*path)
 {
+	// must happen before anything else gets a chance to mmap() -- see
+	// reserve_freezer_address_space()'s comment in freeze.c
+	reserve_freezer_address_space();
+
 	setlocale(LC_ALL, "");
 	setup_carcs_stack();
 	init_glb_cache();

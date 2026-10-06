@@ -1,5 +1,6 @@
 int			load_frozen_grammar(char	*path);
 int			setup_save_frozen_grammar(char	*path);
+void		reserve_freezer_address_space();
 int			load_grammar();
 int			freeze_grammar();
 void		dump_grammar();

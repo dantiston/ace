@@ -624,6 +624,33 @@ int	freeze_fd;
 
 size_t	FREEZER_MMAP_SIZE = 0x14000000;
 
+// how much address space to stake out for the freezer at startup, before
+// `freezer-megabytes' (a grammar config value, not known until well into
+// load_grammar()) is read. Must comfortably cover any real grammar's
+// freezer-megabytes; the actual save/load mmap()s below only ever replace
+// the front portion of this same reservation.
+#define	FREEZER_RESERVE_BYTES	((size_t)4 * 1024 * 1024 * 1024)
+
+// Claim the freezer's address range for ourselves before anything else --
+// the grammar's own slab allocator very much included -- gets a chance to
+// put something there. Without this, on a big enough grammar the OS can
+// (and, for GG, reliably does) hand out an anonymous mmap() that lands
+// inside [FREEZER_MMAP_BASE, FREEZER_MMAP_BASE+freezer-megabytes) well
+// before setup_save_frozen_grammar()/load_frozen_grammar() ever run; the
+// MAP_FIXED mmap() there then silently *replaces* that mapping instead of
+// failing, so whatever live grammar data happened to live in it (types,
+// dgs, strings...) is clobbered mid-freeze/mid-load, and code that still
+// holds pointers into it reads garbage. Reserving the whole range as
+// PROT_NONE up front means the OS can never place anything else there, so
+// the later MAP_FIXED can only ever replace memory we already own.
+void	reserve_freezer_address_space()
+{
+	mmap((void*)FREEZER_MMAP_BASE, FREEZER_RESERVE_BYTES, PROT_NONE,
+		MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0);
+	// best-effort: if this fails, the save/load mmap()s below just take
+	// their chances as they always have.
+}
+
 // prepare mmap to save flat blocks grammar file
 int	setup_save_frozen_grammar(char	*path)
 {
