@@ -486,11 +486,10 @@ static int	load_freeze()
 		exit(-1);
 	}
 
-#ifdef	__aarch64__
+	// see the comment on the equivalent mmap() in setup_save_frozen_grammar():
+	// MAP_FIXED is safe unconditionally now that reserve_freezer_address_space()
+	// has staked out this range for us on every platform.
 	G = (struct grammar*)mmap((void*)FREEZER_MMAP_BASE, loaded_freeze_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, loaded_freeze_fd, 0);
-#else
-	G = (struct grammar*)mmap((void*)FREEZER_MMAP_BASE, loaded_freeze_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, loaded_freeze_fd, 0);
-#endif
 	// first try to map with HUGETLB
 	//G = (struct grammar*)mmap((void*)FREEZER_MMAP_BASE, loaded_freeze_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_HUGETLB, loaded_freeze_fd, 0);
 	//fprintf(stderr, "result of mmap grammar with HUGETLB: %p\n", G);
@@ -624,6 +623,33 @@ int	freeze_fd;
 
 size_t	FREEZER_MMAP_SIZE = 0x14000000;
 
+// how much address space to stake out for the freezer at startup, before
+// `freezer-megabytes' (a grammar config value, not known until well into
+// load_grammar()) is read. Must comfortably cover any real grammar's
+// freezer-megabytes; the actual save/load mmap()s below only ever replace
+// the front portion of this same reservation.
+#define	FREEZER_RESERVE_BYTES	((size_t)4 * 1024 * 1024 * 1024)
+
+// Claim the freezer's address range for ourselves before anything else --
+// the grammar's own slab allocator very much included -- gets a chance to
+// put something there. Without this, on a big enough grammar the OS can
+// (and, for GG, reliably does) hand out an anonymous mmap() that lands
+// inside [FREEZER_MMAP_BASE, FREEZER_MMAP_BASE+freezer-megabytes) well
+// before setup_save_frozen_grammar()/load_frozen_grammar() ever run; the
+// MAP_FIXED mmap() there then silently *replaces* that mapping instead of
+// failing, so whatever live grammar data happened to live in it (types,
+// dgs, strings...) is clobbered mid-freeze/mid-load, and code that still
+// holds pointers into it reads garbage. Reserving the whole range as
+// PROT_NONE up front means the OS can never place anything else there, so
+// the later MAP_FIXED can only ever replace memory we already own.
+void	reserve_freezer_address_space()
+{
+	mmap((void*)FREEZER_MMAP_BASE, FREEZER_RESERVE_BYTES, PROT_NONE,
+		MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0);
+	// best-effort: if this fails, the save/load mmap()s below just take
+	// their chances as they always have.
+}
+
 // prepare mmap to save flat blocks grammar file
 int	setup_save_frozen_grammar(char	*path)
 {
@@ -633,12 +659,14 @@ int	setup_save_frozen_grammar(char	*path)
 	if(freeze_fd<0) { perror(path); exit(-1); }
 
 	if(ftruncate(freeze_fd, FREEZER_MMAP_SIZE)) { perror("ftruncate FREEZER_MMAP_SIZE"); exit(-1); }
-	//freeze_point = mmap((void*)FREEZER_MMAP_BASE, FREEZER_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, freeze_fd, 0);
-#ifdef	__aarch64__
+	// safe to MAP_FIXED unconditionally here: reserve_freezer_address_space()
+	// has already staked out this address range for us on every platform, so
+	// this can only ever replace memory we already own, never anything an
+	// unrelated mmap() got to first. (Without MAP_FIXED, the kernel is free
+	// to place the mapping anywhere else -- which it now reliably does on
+	// x86_64, since the reservation itself occupies the hinted address --
+	// and the check just below would then always fail.)
 	freeze_point = mmap((void*)FREEZER_MMAP_BASE, FREEZER_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, freeze_fd, 0);
-#else
-	freeze_point = mmap((void*)FREEZER_MMAP_BASE, FREEZER_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, freeze_fd, 0);
-#endif
 	if(freeze_point == (void*)MAP_FAILED)
 	{
 		perror("mmap fixed");
