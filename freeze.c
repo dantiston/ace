@@ -486,11 +486,10 @@ static int	load_freeze()
 		exit(-1);
 	}
 
-#ifdef	__aarch64__
+	// see the comment on the equivalent mmap() in setup_save_frozen_grammar():
+	// MAP_FIXED is safe unconditionally now that reserve_freezer_address_space()
+	// has staked out this range for us on every platform.
 	G = (struct grammar*)mmap((void*)FREEZER_MMAP_BASE, loaded_freeze_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, loaded_freeze_fd, 0);
-#else
-	G = (struct grammar*)mmap((void*)FREEZER_MMAP_BASE, loaded_freeze_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, loaded_freeze_fd, 0);
-#endif
 	// first try to map with HUGETLB
 	//G = (struct grammar*)mmap((void*)FREEZER_MMAP_BASE, loaded_freeze_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_HUGETLB, loaded_freeze_fd, 0);
 	//fprintf(stderr, "result of mmap grammar with HUGETLB: %p\n", G);
@@ -660,12 +659,14 @@ int	setup_save_frozen_grammar(char	*path)
 	if(freeze_fd<0) { perror(path); exit(-1); }
 
 	if(ftruncate(freeze_fd, FREEZER_MMAP_SIZE)) { perror("ftruncate FREEZER_MMAP_SIZE"); exit(-1); }
-	//freeze_point = mmap((void*)FREEZER_MMAP_BASE, FREEZER_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, freeze_fd, 0);
-#ifdef	__aarch64__
+	// safe to MAP_FIXED unconditionally here: reserve_freezer_address_space()
+	// has already staked out this address range for us on every platform, so
+	// this can only ever replace memory we already own, never anything an
+	// unrelated mmap() got to first. (Without MAP_FIXED, the kernel is free
+	// to place the mapping anywhere else -- which it now reliably does on
+	// x86_64, since the reservation itself occupies the hinted address --
+	// and the check just below would then always fail.)
 	freeze_point = mmap((void*)FREEZER_MMAP_BASE, FREEZER_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, freeze_fd, 0);
-#else
-	freeze_point = mmap((void*)FREEZER_MMAP_BASE, FREEZER_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, freeze_fd, 0);
-#endif
 	if(freeze_point == (void*)MAP_FAILED)
 	{
 		perror("mmap fixed");
